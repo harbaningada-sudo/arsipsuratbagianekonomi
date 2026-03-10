@@ -3,39 +3,28 @@ import pandas as pd
 import json
 import gspread
 from google.oauth2.service_account import Credentials
-from googleapiclient.discovery import build
-from googleapiclient.http import MediaIoBaseUpload
-import io
+import requests
+import base64
 
 # Konfigurasi Halaman
 st.set_page_config(page_title="Arsip Surat Perekonomian", page_icon="📁", layout="wide")
 
-# Menggunakan ID Folder yang sudah kamu buat
-DRIVE_FOLDER_ID = "1OI_fs7FsMvPV0fL91lIkLgIheYc_BzXC"
-SHEET_NAME = "Database_Arsip_Surat" 
+# KONFIGURASI LINK (Sudah pakai link jembatan milik bro)
+APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwvyAuXxveS8w0w6wFMffeptDvldRB_NIdnYd1-rf-sl0U23n6ZcDQdgjWD33Jo0eEXfw/exec"
+SHEET_NAME = "Database_Arsip_Surat"
 
-# Fungsi untuk mengkoneksikan Python dengan Google API
 @st.cache_resource
-def get_google_services():
-    # Mengambil kunci rahasia dari Streamlit Secrets
+def get_gspread_client():
+    # Mengambil kunci dari Secrets Streamlit
     key_dict = json.loads(st.secrets["google_key"])
-    
-    # Izin akses ke Drive & Sheets
-    scopes = [
-        "https://www.googleapis.com/auth/spreadsheets",
-        "https://www.googleapis.com/auth/drive"
-    ]
-    
+    scopes = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
     creds = Credentials.from_service_account_info(key_dict, scopes=scopes)
-    gc = gspread.authorize(creds)
-    drive_service = build('drive', 'v3', credentials=creds)
-    
-    return gc, drive_service
+    return gspread.authorize(creds)
 
 try:
-    gc, drive_service = get_google_services()
+    gc = get_gspread_client()
 except Exception as e:
-    st.error(f"Gagal terhubung ke Google. Cek kembali isi Secrets. Error: {e}")
+    st.error(f"Gagal terhubung ke Google Sheets: {e}")
     st.stop()
 
 # Sidebar Navigasi
@@ -44,91 +33,89 @@ with st.sidebar:
     st.markdown("---")
     menu = st.radio("Pilih Halaman:", ["📥 Upload Surat Baru", "🗂️ Lihat Data Arsip"])
     st.markdown("---")
-    st.caption("Sistem Informasi Persuratan")
+    st.caption("Sistem Informasi Persuratan - Bagian Perekonomian")
 
-# Halaman Upload Surat
+# HALAMAN UPLOAD
 if menu == "📥 Upload Surat Baru":
     st.title("Form Upload Surat Baru")
-    st.markdown("Silakan isi detail surat dan unggah file PDF.")
+    st.markdown("Isi data surat dan unggah file PDF untuk disimpan otomatis ke Google Drive.")
     
-    with st.container():
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            no_surat = st.text_input("Nomor Surat*")
-            tgl_surat = st.date_input("Tanggal Surat")
-            
-        with col2:
-            jenis = st.selectbox("Jenis Surat", ["Surat Masuk", "Surat Keluar"])
-            file_surat = st.file_uploader("Upload File Surat (Format .pdf)*", type=["pdf"])
-            
-        perihal = st.text_area("Perihal / Isi Ringkas Surat")
+    col1, col2 = st.columns(2)
+    with col1:
+        no_surat = st.text_input("Nomor Surat*")
+        tgl_surat = st.date_input("Tanggal Surat")
+    with col2:
+        jenis = st.selectbox("Jenis Surat", ["Surat Masuk", "Surat Keluar"])
+        file_surat = st.file_uploader("Upload File PDF*", type=["pdf"])
+    
+    perihal = st.text_area("Perihal / Isi Ringkas Surat")
 
-    # Tombol Simpan
     if st.button("💾 Simpan Arsip Permanen", use_container_width=True):
-        if file_surat is not None and no_surat != "":
-            with st.spinner("Sedang mengunggah ke Google Drive & Sheets..."):
+        if file_surat and no_surat:
+            with st.spinner("Sedang memproses upload ke Drive & Sheets..."):
                 try:
-                    # 1. Upload file PDF ke Google Drive
-                    file_metadata = {
-                        'name': file_surat.name,
-                        'parents': [DRIVE_FOLDER_ID]
+                    # 1. Kirim file ke Jembatan Apps Script
+                    file_content = base64.b64encode(file_surat.read()).decode()
+                    payload = {
+                        "fileData": file_content,
+                        "fileName": file_surat.name,
+                        "mimeType": "application/pdf"
                     }
-                    media = MediaIoBaseUpload(io.BytesIO(file_surat.getbuffer()), mimetype='application/pdf', resumable=True)
                     
-                    uploaded_file = drive_service.files().create(
-                        body=file_metadata, 
-                        media_body=media, 
-                        fields='id, webViewLink'
-                    ).execute()
-                    
-                    file_url = uploaded_file.get('webViewLink')
+                    # Mengirim data ke URL Jembatan bro
+                    response = requests.post(APPS_SCRIPT_URL, data=payload)
+                    file_url = response.text
 
-                    # 2. Simpan Data ke Google Sheets
-                    sh = gc.open(SHEET_NAME)
-                    worksheet = sh.sheet1
-                    
-                    tgl_str = tgl_surat.strftime("%Y-%m-%d")
-                    row_data = [no_surat, tgl_str, jenis, perihal, file_url]
-                    worksheet.append_row(row_data)
-
-                    st.success(f"Berhasil bro! Surat nomor {no_surat} telah diamankan ke Drive & Sheets.")
+                    if "https://" in file_url:
+                        # 2. Jika upload sukses, catat linknya ke Google Sheets
+                        sh = gc.open(SHEET_NAME)
+                        worksheet = sh.sheet1
+                        
+                        # Data yang akan dimasukkan ke baris baru
+                        row_data = [
+                            no_surat, 
+                            tgl_surat.strftime("%Y-%m-%d"), 
+                            jenis, 
+                            perihal, 
+                            file_url
+                        ]
+                        worksheet.append_row(row_data)
+                        
+                        st.success(f"Berhasil bro! Surat nomor {no_surat} telah diamankan ke Drive & Sheets.")
+                        st.balloons()
+                    else:
+                        st.error(f"Gagal Upload ke Drive: {file_url}")
                 except Exception as e:
-                    st.error(f"Terjadi kesalahan saat menyimpan: {e}")
+                    st.error(f"Terjadi kesalahan teknis: {e}")
         else:
-            st.error("Gagal: Nomor Surat wajib diisi dan File PDF wajib diunggah!")
+            st.warning("Gagal: Nomor Surat dan File PDF wajib diisi!")
 
-# Halaman Lihat Arsip
+# HALAMAN LIHAT DATA
 elif menu == "🗂️ Lihat Data Arsip":
     st.title("Data Arsip Persuratan")
-    
     try:
         sh = gc.open(SHEET_NAME)
         worksheet = sh.sheet1
         data = worksheet.get_all_records()
         
-        if not data:
-            st.info("Belum ada data surat yang tersimpan di Google Sheets.")
-        else:
+        if data:
             df = pd.DataFrame(data)
             
-            # Fitur Pencarian
-            cari = st.text_input("🔍 Cari arsip berdasarkan Nomor Surat atau Perihal:")
-            
+            # Fitur Pencarian sederhana
+            cari = st.text_input("🔍 Cari berdasarkan Nomor Surat atau Perihal")
             if cari:
-                df = df[df['Nomor Surat'].astype(str).str.contains(cari, case=False, na=False) | 
-                        df['Perihal'].astype(str).str.contains(cari, case=False, na=False)]
-                st.markdown(f"**Ditemukan {len(df)} surat**")
-
-            # Ubah link drive agar bisa langsung diklik
+                df = df[df.astype(str).apply(lambda x: x.str.contains(cari, case=False)).any(axis=1)]
+            
+            # Tampilkan Tabel dengan Link yang bisa diklik
             st.dataframe(
                 df, 
                 use_container_width=True, 
                 hide_index=True,
                 column_config={
-                    "Link Drive": st.column_config.LinkColumn("Link File (Klik untuk buka)")
+                    "Link Drive": st.column_config.LinkColumn("Buka File PDF")
                 }
             )
-            
+        else:
+            st.info("Belum ada data surat yang tersimpan.")
     except Exception as e:
-        st.error(f"Gagal mengambil data dari Google Sheets. Pastikan nama filenya benar 'Database_Arsip_Surat'. Error: {e}")
+        st.error(f"Gagal memuat data dari database: {e}")
