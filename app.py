@@ -19,7 +19,7 @@ ADMIN_USERS = {
 # 2. KONFIGURASI LINK & DATABASE
 # ==========================================
 # GANTI link di bawah ini dengan URL Web App dari Google Apps Script kamu yang terbaru!
-APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwvyAuXxveS8w0w6wFMffeptDvldRB_NIdnYd1-rf-sl0U23n6ZcDQdgjWD33Jo0eEXfw/exec"
+APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbx0lNB9HqbsEQWHlFpqcCupz3_JFODW8Uf0tD0vYtflJhIio7BCBR-YPYQrkE9Y8TvgHg/exec"
 SHEET_NAME = "Database_Arsip_Surat"
 
 # Konfigurasi Tampilan Web
