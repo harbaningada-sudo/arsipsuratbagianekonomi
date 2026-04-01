@@ -7,25 +7,22 @@ import requests
 import base64
 
 # ==========================================
-# 1. PENGATURAN LOGIN ADMIN
+# 1. KONFIGURASI LOGIN & LINK
 # ==========================================
-# Silakan ganti username dan password di bawah ini
+# Username dan Password untuk Admin
 ADMIN_USERS = {
     "admin1": "password123",
     "admin2": "ngadabisa"
 }
 
-# ==========================================
-# 2. KONFIGURASI LINK & DATABASE
-# ==========================================
-# GANTI link di bawah ini dengan URL Web App dari Google Apps Script kamu yang terbaru!
-APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwvyAuXxveS8w0w6wFMffeptDvldRB_NIdnYd1-rf-sl0U23n6ZcDQdgjWD33Jo0eEXfw/exec"
+# MASUKKAN URL APPS SCRIPT YANG BARU DI SINI!
+APPS_SCRIPT_URL = "ISI_DENGAN_URL_DEPLOYMENT_KAMU_YANG_BARU"
 SHEET_NAME = "Database_Arsip_Surat"
 
-# Konfigurasi Tampilan Web
-st.set_page_config(page_title="Arsip Digital Perekonomian Ngada", page_icon="📁", layout="wide")
+# Konfigurasi Tampilan
+st.set_page_config(page_title="Arsip Digital Ekonomi Ngada", page_icon="📁", layout="wide")
 
-# Fungsi Koneksi ke Google Sheets
+# Fungsi Koneksi Google Sheets
 @st.cache_resource
 def get_gspread_client():
     try:
@@ -39,11 +36,11 @@ def get_gspread_client():
 
 gc = get_gspread_client()
 
-# Inisialisasi Status Login
+# Inisialisasi Login
 if "logged_in" not in st.session_state:
     st.session_state["logged_in"] = False
 
-# --- SIDEBAR & NAVIGASI ---
+# --- SIDEBAR NAVIGASI ---
 with st.sidebar:
     st.title("📁 Menu Utama")
     st.markdown("---")
@@ -58,14 +55,14 @@ with st.sidebar:
                 st.session_state["user_now"] = user
                 st.rerun()
             else:
-                st.error("Login Gagal!")
+                st.error("Username/Password Salah!")
         
         st.markdown("---")
         menu = st.radio("Navigasi:", ["🗂️ Lihat Data Arsip"])
     else:
         st.success(f"Aktif: {st.session_state['user_now']}")
         menu = st.radio("Navigasi:", ["🗂️ Lihat Data Arsip", "📥 Upload Surat Baru"])
-        if st.button("Log Out"):
+        if st.button("Keluar (Log Out)"):
             st.session_state["logged_in"] = False
             st.rerun()
 
@@ -73,7 +70,7 @@ with st.sidebar:
     st.caption("Sistem Informasi Persuratan - Kab. Ngada")
 
 # ==========================================
-# 3. HALAMAN LIHAT DATA (Bisa dilihat siapa saja)
+# 2. HALAMAN LIHAT DATA
 # ==========================================
 if menu == "🗂️ Lihat Data Arsip":
     st.title("Daftar Arsip Surat Digital")
@@ -86,9 +83,9 @@ if menu == "🗂️ Lihat Data Arsip":
             df = pd.DataFrame(data)
             
             # Kolom Pencarian
-            search_query = st.text_input("🔍 Cari Nomor Surat, Perihal, atau Tanggal")
-            if search_query:
-                df = df[df.astype(str).apply(lambda x: x.str.contains(search_query, case=False)).any(axis=1)]
+            search = st.text_input("🔍 Cari Nomor Surat atau Perihal")
+            if search:
+                df = df[df.astype(str).apply(lambda x: x.str.contains(search, case=False)).any(axis=1)]
             
             # Tampilkan Tabel
             st.dataframe(
@@ -96,16 +93,16 @@ if menu == "🗂️ Lihat Data Arsip":
                 use_container_width=True, 
                 hide_index=True,
                 column_config={
-                    "Link Drive": st.column_config.LinkColumn("📂 Buka File PDF")
+                    "Link Drive": st.column_config.LinkColumn("📂 Buka PDF")
                 }
             )
         else:
-            st.info("Database masih kosong. Silakan upload surat pertama.")
+            st.info("Belum ada data arsip.")
     except Exception as e:
-        st.error(f"Koneksi Database Terputus: {e}")
+        st.error(f"Gagal memuat database: {e}")
 
 # ==========================================
-# 4. HALAMAN UPLOAD (Hanya untuk Admin)
+# 3. HALAMAN UPLOAD (Hanya Admin)
 # ==========================================
 elif menu == "📥 Upload Surat Baru" and st.session_state["logged_in"]:
     st.title("Input Arsip Surat Baru")
@@ -117,37 +114,38 @@ elif menu == "📥 Upload Surat Baru" and st.session_state["logged_in"]:
             tgl_surat = st.date_input("Tanggal Surat")
         with col2:
             jenis = st.selectbox("Jenis Surat", ["Surat Masuk", "Surat Keluar"])
-            file_surat = st.file_uploader("Pilih File PDF*", type=["pdf"])
+            file_pdf = st.file_uploader("Pilih File PDF*", type=["pdf"])
         
-        perihal = st.text_area("Perihal / Ringkasan Isi Surat")
+        perihal = st.text_area("Perihal / Ringkasan Surat")
         submit = st.form_submit_button("🚀 Simpan ke Database & Drive")
 
     if submit:
-        if no_surat and file_surat:
-            with st.spinner("Sedang mengamankan file ke Google Drive..."):
+        if no_surat and file_pdf:
+            with st.spinner("Sedang memproses... Tunggu sampai selesai!"):
                 try:
-                    # 1. Kirim ke Jembatan Apps Script
-                    file_content = base64.b64encode(file_surat.read()).decode()
+                    # Proses kirim ke Apps Script
+                    file_content = base64.b64encode(file_pdf.read()).decode()
                     payload = {
                         "fileData": file_content,
-                        "fileName": file_surat.name,
+                        "fileName": file_pdf.name,
                         "mimeType": "application/pdf"
                     }
                     
-                    response = requests.post(APPS_SCRIPT_URL, data=payload)
-                    file_url = response.text
+                    # Kirim data ke Jembatan Google
+                    res = requests.post(APPS_SCRIPT_URL, data=payload)
+                    link_pdf = res.text
 
-                    # 2. Cek apakah hasil upload adalah link valid
-                    if "https://" in file_url:
+                    # Cek hasil (Harus berupa link HTTPS)
+                    if "https://" in link_pdf:
                         sh = gc.open(SHEET_NAME)
-                        row = [no_surat, tgl_surat.strftime("%Y-%m-%d"), jenis, perihal, file_url]
-                        sh.sheet1.append_row(row)
+                        baris_baru = [no_surat, tgl_surat.strftime("%Y-%m-%d"), jenis, perihal, link_pdf]
+                        sh.sheet1.append_row(baris_baru)
                         
-                        st.success(f"SUKSES! Surat {no_surat} berhasil diarsipkan.")
+                        st.success(f"BERHASIL! Surat {no_surat} sudah tersimpan.")
                         st.balloons()
                     else:
-                        st.error(f"Gagal Simpan: {file_url}. Periksa izin DriveApp di Google Script!")
+                        st.error(f"Gagal Simpan: {link_pdf}. Pastikan izin 'Anyone' sudah aktif di Script!")
                 except Exception as e:
-                    st.error(f"Terjadi Kesalahan: {e}")
+                    st.error(f"Terjadi Gangguan: {e}")
         else:
-            st.warning("Nomor Surat dan File PDF tidak boleh kosong!")
+            st.warning("Mohon isi Nomor Surat dan lampirkan PDF-nya!")
