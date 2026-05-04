@@ -16,7 +16,7 @@ ADMIN_USERS = {
 }
 
 # GANTI DENGAN URL APPS SCRIPT DEPLOYMENT KAMU
-APPS_SCRIPT_URL = st.secrets.get("apps_script_url", "ISI_URL_APPS_SCRIPT_DISINI")
+APPS_SCRIPT_URL = st.secrets.get("apps_script_url", "https://script.google.com/macros/s/AKfycbxs0Wp-aH1-awpwcHKz_8goz7sBZF4Xr7ZnJ3kTjYdMXY9czlCa_Oj5RUIMM6EbZ0w6/exec")
 SHEET_NAME = "Database_Arsip_Surat"
 
 # Batas ukuran file PDF (dalam MB)
